@@ -16,16 +16,16 @@
  */
 package com.comphenix.protocol.updater;
 
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.error.Report;
-import com.comphenix.protocol.utility.Closer;
-import org.bukkit.plugin.Plugin;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+
+import org.bukkit.plugin.Plugin;
+
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.error.Report;
 
 /**
  * Adapted version of the Bukkit updater for use with Spigot resources
@@ -91,14 +91,12 @@ public final class SpigotUpdater extends Updater {
     private static final String ACTION = "GET";
 
     public String getSpigotVersion() throws IOException {
-        try (Closer closer = Closer.create()) {
-            HttpURLConnection con = (HttpURLConnection) new URL(UPDATE_URL).openConnection();
-            con.setDoOutput(true);
-            con.setRequestMethod(ACTION);
+        HttpURLConnection con = (HttpURLConnection) new URL(UPDATE_URL).openConnection();
+        con.setDoOutput(true);
+        con.setRequestMethod(ACTION);
 
-            InputStreamReader isr = closer.register(new InputStreamReader(con.getInputStream()));
-            BufferedReader br = closer.register(new BufferedReader(isr));
-            return br.readLine();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(con.getInputStream()))) {
+            return reader.readLine();
         }
     }
 

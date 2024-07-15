@@ -15,16 +15,18 @@
  */
 package com.comphenix.protocol;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.io.Files;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.Plugin;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import com.google.common.collect.ImmutableList;
 
 /**
  * Represents the configuration of ProtocolLib.
@@ -46,7 +48,6 @@ public class ProtocolConfig {
     private static final String DETAILED_ERROR = "detailed error";
     private static final String CHAT_WARNINGS = "chat warnings";
 
-    private static final String SCRIPT_ENGINE_NAME = "script engine";
     private static final String SUPPRESSED_REPORTS = "suppressed reports";
 
     private static final String UPDATER_NOTIFY = "notify";
@@ -96,11 +97,12 @@ public class ProtocolConfig {
      * @return Last update time stamp.
      */
     private long loadLastUpdate() {
-        File dataFile = getLastUpdateFile();
+        Path dataFile = getLastUpdateFile();
 
-        if (dataFile.exists()) {
+        if (Files.exists(dataFile)) {
             try {
-                return Long.parseLong(Files.toString(dataFile, StandardCharsets.UTF_8));
+                String value = new String(Files.readAllBytes(dataFile), StandardCharsets.UTF_8);
+                return Long.parseLong(value);
             } catch (NumberFormatException e) {
                 plugin.getLogger().warning("Cannot parse " + dataFile + " as a number.");
             } catch (IOException e) {
@@ -117,17 +119,14 @@ public class ProtocolConfig {
      * @param value - time stamp to store.
      */
     private void saveLastUpdate(long value) {
-        File dataFile = getLastUpdateFile();
-
-        // The data folder must exist
-        dataFile.getParentFile().mkdirs();
-
-        if (dataFile.exists()) {
-            dataFile.delete();
-        }
+        Path dataFile = getLastUpdateFile();
 
         try {
-            Files.write(Long.toString(value), dataFile, StandardCharsets.UTF_8);
+            // The data folder must exist
+            Files.createDirectories(dataFile.getParent());
+
+            // write update timestamp
+            Files.write(dataFile, Long.toString(value).getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             throw new RuntimeException("Cannot write " + dataFile, e);
         }
@@ -138,8 +137,8 @@ public class ProtocolConfig {
      *
      * @return File storing the update time stamp.
      */
-    private File getLastUpdateFile() {
-        return new File(plugin.getDataFolder(), LAST_UPDATE_FILE);
+    private Path getLastUpdateFile() {
+        return plugin.getDataFolder().toPath().resolve(LAST_UPDATE_FILE);
     }
 
     /**
@@ -325,27 +324,6 @@ public class ProtocolConfig {
     public void setAutoLastTime(long lastTimeSeconds) {
         this.valuesChanged = true;
         this.lastUpdateTime = lastTimeSeconds;
-    }
-
-    /**
-     * Retrieve the unique name of the script engine to use for filtering.
-     *
-     * @return Script engine to use.
-     */
-    public String getScriptEngineName() {
-        return getGlobalValue(SCRIPT_ENGINE_NAME, "JavaScript");
-    }
-
-    /**
-     * Set the unique name of the script engine to use for filtering.
-     * <p>
-     * This setting will take effect next time ProtocolLib is started.
-     *
-     * @param name - name of the script engine to use.
-     */
-    public void setScriptEngineName(String name) {
-        setConfig(global, SCRIPT_ENGINE_NAME, name);
-        modCount++;
     }
 
     /**

@@ -17,21 +17,6 @@
 
 package com.comphenix.protocol;
 
-import com.comphenix.protocol.PacketType.Sender;
-import com.comphenix.protocol.concurrency.PacketTypeSet;
-import com.comphenix.protocol.error.ErrorReporter;
-import com.comphenix.protocol.error.ReportType;
-import com.comphenix.protocol.events.ListeningWhitelist;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.events.PacketListener;
-import com.comphenix.protocol.utility.ChatExtensions;
-import com.comphenix.protocol.utility.HexDumper;
-import com.google.common.collect.MapMaker;
-import org.bukkit.ChatColor;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,6 +28,21 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import org.bukkit.ChatColor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+
+import com.comphenix.protocol.PacketType.Sender;
+import com.comphenix.protocol.error.ErrorReporter;
+import com.comphenix.protocol.error.ReportType;
+import com.comphenix.protocol.events.ListeningWhitelist;
+import com.comphenix.protocol.events.PacketEvent;
+import com.comphenix.protocol.events.PacketListener;
+import com.comphenix.protocol.utility.ChatExtensions;
+import com.comphenix.protocol.utility.HexDumper;
+import com.google.common.collect.MapMaker;
 
 /**
  * Handles the "packet" debug command.
@@ -79,11 +79,11 @@ class CommandPacket extends CommandBase {
     private final Map<CommandSender, List<String>> pagedMessage = new WeakHashMap<CommandSender, List<String>>();
     
     // Current registered packet types
-    private final PacketTypeSet packetTypes = new PacketTypeSet();
-    private final PacketTypeSet extendedTypes = new PacketTypeSet();
+    private final Set<PacketType> packetTypes = new HashSet<>();
+    private final Set<PacketType> extendedTypes = new HashSet<>();
     
     // Compare listeners
-    private final PacketTypeSet compareTypes = new PacketTypeSet();
+    private final Set<PacketType> compareTypes = new HashSet<>();
     private final Map<PacketEvent, String> originalPackets = new MapMaker().weakKeys().makeMap();
     
     // The packet listener
@@ -92,15 +92,11 @@ class CommandPacket extends CommandBase {
     // Compare listener
     private PacketListener compareListener;
     
-    // Filter packet events
-    private final CommandFilter filter;
-    
-    public CommandPacket(ErrorReporter reporter, Plugin plugin, Logger logger, CommandFilter filter, ProtocolManager manager) {
+    public CommandPacket(ErrorReporter reporter, Plugin plugin, Logger logger, ProtocolManager manager) {
         super(reporter, CommandBase.PERMISSION_ADMIN, NAME, 1);
         this.plugin = plugin;
         this.logger = logger;
         this.manager = manager;
-        this.filter = filter;
         this.chatter = new ChatExtensions(manager);
     }
 
@@ -297,7 +293,6 @@ class CommandPacket extends CommandBase {
     public PacketListener createPacketListener(Set<PacketType> type) {
         final ListeningWhitelist serverList = ListeningWhitelist.newBuilder().
                 types(filterTypes(type, Sender.SERVER)).
-                gamePhaseBoth().
                 monitor().
                 build();
         
@@ -309,16 +304,12 @@ class CommandPacket extends CommandBase {
         return new PacketListener() {
             @Override
             public void onPacketSending(PacketEvent event) {
-                if (filter.filterEvent(event)) {
-                    printInformation(event);
-                }
+                printInformation(event);
             }
             
             @Override
             public void onPacketReceiving(PacketEvent event) {
-                if (filter.filterEvent(event)) {
-                    printInformation(event);
-                }
+                printInformation(event);
             }
             
             private void printInformation(PacketEvent event) {
@@ -374,7 +365,6 @@ class CommandPacket extends CommandBase {
     public PacketListener createCompareListener(Set<PacketType> type) {
         final ListeningWhitelist serverList = ListeningWhitelist.newBuilder().
                 types(filterTypes(type, Sender.SERVER)).
-                gamePhaseBoth().
                 lowest().
                 build();
         
@@ -432,8 +422,8 @@ class CommandPacket extends CommandBase {
         }
         
         // Register the new listeners 
-        listener = createPacketListener(packetTypes.values());
-        compareListener = createCompareListener(compareTypes.values());
+        listener = createPacketListener(packetTypes);
+        compareListener = createCompareListener(compareTypes);
         manager.addPacketListener(listener);
         manager.addPacketListener(compareListener);
         return listener;

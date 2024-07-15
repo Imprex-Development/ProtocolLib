@@ -52,7 +52,7 @@ import java.util.logging.Logger;
  * Logs packets to a given stream
  * @author dmulloy2
  */
-public class PacketLogging implements CommandExecutor, PacketListener {
+public class CommandPacketLogging implements CommandExecutor, PacketListener {
     public static final String NAME = "packetlog";
 
     private static MethodAccessor HEX_DUMP;
@@ -69,7 +69,7 @@ public class PacketLogging implements CommandExecutor, PacketListener {
     private final ProtocolManager manager;
     private final Plugin plugin;
 
-    PacketLogging(Plugin plugin, ProtocolManager manager) {
+    CommandPacketLogging(Plugin plugin, ProtocolManager manager) {
         this.plugin = plugin;
         this.manager = manager;
     }

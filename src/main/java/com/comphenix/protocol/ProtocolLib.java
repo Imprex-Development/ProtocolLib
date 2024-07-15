@@ -15,26 +15,8 @@
  */
 package com.comphenix.protocol;
 
-import com.comphenix.protocol.async.AsyncFilterManager;
-import com.comphenix.protocol.error.BasicErrorReporter;
-import com.comphenix.protocol.error.DelegatedErrorReporter;
-import com.comphenix.protocol.error.DetailedErrorReporter;
-import com.comphenix.protocol.error.ErrorReporter;
-import com.comphenix.protocol.error.Report;
-import com.comphenix.protocol.error.ReportType;
-import com.comphenix.protocol.injector.InternalManager;
-import com.comphenix.protocol.injector.PacketFilterManager;
-import com.comphenix.protocol.metrics.Statistics;
-import com.comphenix.protocol.scheduler.DefaultScheduler;
-import com.comphenix.protocol.scheduler.FoliaScheduler;
-import com.comphenix.protocol.scheduler.ProtocolScheduler;
-import com.comphenix.protocol.scheduler.Task;
-import com.comphenix.protocol.updater.Updater;
-import com.comphenix.protocol.updater.Updater.UpdateType;
-import com.comphenix.protocol.utility.*;
-import com.google.common.base.Splitter;
-import com.google.common.collect.Iterables;
-
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,6 +34,32 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import com.comphenix.protocol.async.AsyncFilterManager;
+import com.comphenix.protocol.error.BasicErrorReporter;
+import com.comphenix.protocol.error.DelegatedErrorReporter;
+import com.comphenix.protocol.error.DetailedErrorReporter;
+import com.comphenix.protocol.error.ErrorReporter;
+import com.comphenix.protocol.error.Report;
+import com.comphenix.protocol.error.ReportType;
+import com.comphenix.protocol.events.PacketAdapter;
+import com.comphenix.protocol.events.PacketEvent;
+import com.comphenix.protocol.injector.InternalManager;
+import com.comphenix.protocol.injector.PacketFilterManager;
+import com.comphenix.protocol.metrics.Statistics;
+import com.comphenix.protocol.scheduler.DefaultScheduler;
+import com.comphenix.protocol.scheduler.FoliaScheduler;
+import com.comphenix.protocol.scheduler.ProtocolScheduler;
+import com.comphenix.protocol.scheduler.Task;
+import com.comphenix.protocol.updater.Updater;
+import com.comphenix.protocol.updater.Updater.UpdateType;
+import com.comphenix.protocol.utility.ByteBuddyFactory;
+import com.comphenix.protocol.utility.ChatExtensions;
+import com.comphenix.protocol.utility.MinecraftVersion;
+import com.comphenix.protocol.utility.StreamSerializer;
+import com.comphenix.protocol.utility.Util;
+import com.google.common.base.Splitter;
+import com.google.common.collect.Iterables;
 
 /**
  * The main entry point for ProtocolLib.
@@ -109,8 +117,7 @@ public class ProtocolLib extends JavaPlugin {
     // commands
     private CommandProtocol commandProtocol;
     private CommandPacket commandPacket;
-    private CommandFilter commandFilter;
-    private PacketLogging packetLogging;
+    private CommandPacketLogging commandPacketLogging;
 
     // Whether disabling field resetting is needed
     private boolean skipDisable;
@@ -203,14 +210,11 @@ public class ProtocolLib extends JavaPlugin {
                     case PROTOCOL:
                         this.commandProtocol = new CommandProtocol(reporter, this, this.updater, config);
                         break;
-                    case FILTER:
-                        this.commandFilter = new CommandFilter(reporter, this, config);
-                        break;
                     case PACKET:
-                        this.commandPacket = new CommandPacket(reporter, this, logger, this.commandFilter, protocolManager);
+                        this.commandPacket = new CommandPacket(reporter, this, logger, protocolManager);
                         break;
                     case LOGGING:
-                        this.packetLogging = new PacketLogging(this, protocolManager);
+                        this.commandPacketLogging = new CommandPacketLogging(this, protocolManager);
                         break;
                 }
             } catch (OutOfMemoryError e) {
@@ -332,8 +336,7 @@ public class ProtocolLib extends JavaPlugin {
             // Set up command handlers
             this.registerCommand(CommandProtocol.NAME, this.commandProtocol);
             this.registerCommand(CommandPacket.NAME, this.commandPacket);
-            this.registerCommand(CommandFilter.NAME, this.commandFilter);
-            this.registerCommand(PacketLogging.NAME, this.packetLogging);
+            this.registerCommand(CommandPacketLogging.NAME, this.commandPacketLogging);
 
             // Player login and logout events
             protocolManager.registerEvents(manager, this);
@@ -341,6 +344,15 @@ public class ProtocolLib extends JavaPlugin {
             // Worker that ensures that async packets are eventually sent
             // It also performs the update check.
             this.createPacketTask(server);
+
+            protocolManager.addPacketListener(new PacketAdapter(this, PacketType.Handshake.Client.SET_PROTOCOL) {
+                @Override
+                public void onPacketReceiving(PacketEvent event) {
+                    System.out.println(event);
+                    System.out.println(event.getPacket().getClientIntents().readSafely(0));
+                    event.setCancelled(true);
+                }
+            });
         } catch (OutOfMemoryError e) {
             throw e;
         } catch (Throwable e) {
@@ -591,7 +603,6 @@ public class ProtocolLib extends JavaPlugin {
 
     // Different commands
     private enum ProtocolCommand {
-        FILTER,
         PACKET,
         PROTOCOL,
         LOGGING

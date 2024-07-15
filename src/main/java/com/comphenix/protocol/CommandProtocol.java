@@ -16,10 +16,9 @@
  */
 package com.comphenix.protocol;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -40,7 +39,6 @@ import com.comphenix.protocol.timing.TimingReport;
 import com.comphenix.protocol.timing.TimingTrackerManager;
 import com.comphenix.protocol.updater.Updater;
 import com.comphenix.protocol.updater.Updater.UpdateType;
-import com.comphenix.protocol.utility.Closer;
 
 /**
  * Handles the "protocol" administration command.
@@ -218,63 +216,59 @@ class CommandProtocol extends CommandBase {
         if (TIMESTAMP_FORMAT == null)
             TIMESTAMP_FORMAT = new SimpleDateFormat("MM/dd/yy HH:mm:ss");
 
-        try (Closer closer = Closer.create()) {
+        try {
             Date date = new Date();
-            File file = new File(plugin.getDataFolder(), "dump-" + FILE_FORMAT.format(date) + ".txt");
-            if (file.exists()) {
-                file.delete();
-            }
+            Path path = plugin.getDataFolder().toPath().resolve("dump-" + FILE_FORMAT.format(date) + ".txt");
 
-            file.createNewFile();
+            Files.createDirectories(path.getParent());
 
-            FileWriter fw = closer.register(new FileWriter(file));
-            PrintWriter pw = closer.register(new PrintWriter(fw));
+            try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(path))) {
+                writer.println("ProtocolLib Dump");
+                writer.println("Timestamp: " + TIMESTAMP_FORMAT.format(date));
+                writer.println();
 
-            pw.println("ProtocolLib Dump");
-            pw.println("Timestamp: " + TIMESTAMP_FORMAT.format(date));
-            pw.println();
+                writer.println("ProtocolLib Version: " + plugin.toString());
+                writer.println("Bukkit Version: " + plugin.getServer().getBukkitVersion());
+                writer.println("Server Version: " + plugin.getServer().getVersion());
+                writer.println("Java Version: " + System.getProperty("java.version"));
+                writer.println();
 
-            pw.println("ProtocolLib Version: " + plugin.toString());
-            pw.println("Bukkit Version: " + plugin.getServer().getBukkitVersion());
-            pw.println("Server Version: " + plugin.getServer().getVersion());
-            pw.println("Java Version: " + System.getProperty("java.version"));
-            pw.println();
+                ProtocolManager manager = ProtocolLibrary.getProtocolManager();
+                writer.println("ProtocolLib: " + DetailedErrorReporter.getStringDescription(plugin));
+                writer.println("Manager: " + DetailedErrorReporter.getStringDescription(manager));
+                writer.println();
 
-            ProtocolManager manager = ProtocolLibrary.getProtocolManager();
-            pw.println("ProtocolLib: " + DetailedErrorReporter.getStringDescription(plugin));
-            pw.println("Manager: " + DetailedErrorReporter.getStringDescription(manager));
-            pw.println();
+                Set<PacketListener> listeners = manager.getPacketListeners();
+                Set<Plugin> plugins = new HashSet<>();
 
-            Set<PacketListener> listeners = manager.getPacketListeners();
-            Set<Plugin> plugins = new HashSet<>();
+                if (!listeners.isEmpty()) {
+                    writer.println("Listeners:");
 
-            if (!listeners.isEmpty()) {
-                pw.println("Listeners:");
+                    for (PacketListener listener : listeners) {
+                        writer.println(DetailedErrorReporter.getStringDescription(listener));
 
-                for (PacketListener listener : listeners) {
-                    pw.println(DetailedErrorReporter.getStringDescription(listener));
-
-                    Plugin plugin = listener.getPlugin();
-                    if (plugin != null) {
-                        plugins.add(plugin);
-                    } else {
-                        pw.println("(Missing plugin!)");
+                        Plugin plugin = listener.getPlugin();
+                        if (plugin != null) {
+                            plugins.add(plugin);
+                        } else {
+                            writer.println("(Missing plugin!)");
+                        }
                     }
+
+                    writer.println();
+                } else {
+                    writer.println("No listeners");
                 }
 
-                pw.println();
-            } else {
-                pw.println("No listeners");
+                if (!plugins.isEmpty()) {
+                    writer.println("Plugins Using ProtocolLib:");
+                    for (Plugin plugin : plugins) {
+                        writer.println(plugin.getName() + " by " + plugin.getDescription().getAuthors());
+                    }
+                }   
             }
 
-            if (!plugins.isEmpty()) {
-                pw.println("Plugins Using ProtocolLib:");
-                for (Plugin plugin : plugins) {
-                    pw.println(plugin.getName() + " by " + plugin.getDescription().getAuthors());
-                }
-            }
-
-            sender.sendMessage("Data dump written to " + file.getAbsolutePath());
+            sender.sendMessage("Data dump written to " + path.toAbsolutePath());
         } catch (IOException ex) {
             ProtocolLogger.log(Level.SEVERE, "Failed to create dump:", ex);
             sender.sendMessage(ChatColor.RED + "Failed to create dump! Check console!");

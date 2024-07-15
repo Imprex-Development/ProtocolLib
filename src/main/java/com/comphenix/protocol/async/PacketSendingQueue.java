@@ -187,7 +187,7 @@ abstract class PacketSendingQueue {
             // Is it okay to send the packet?
             if (!current.isCancelled() && !hasExpired) {
                 // Make sure we're on the main thread
-                if (notThreadSafe) {
+                if (notThreadSafe) { // all packets support async send via commonpacketlistner or networkmanager
                     try {
                         boolean wantAsync = marker.isMinecraftAsync(current);
                         boolean wantSync = !wantAsync;
